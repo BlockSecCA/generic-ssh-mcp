@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP Log Viewer</title>
+    <title>Universal Claude Log Viewer</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -28,41 +28,97 @@
             const [timeRangeFilter, setTimeRangeFilter] = useState({ start: null, end: null });
 
             const parseLogEntry = (line) => {
-                const match = line.match(/^(\S+)\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+?)(?:\s+\{[^}]*\}\s*)?$/);
-                if (!match) {
-                    console.log('Failed to parse line:', line.substring(0, 100));
-                    return null;
-                }
-
-                const [, timestamp, serverName, logLevel, message] = match;
+                // Try MCP server format: 2025-10-31T18:49:58.285Z [server-name] [info] Message { metadata: ... }
+                let match = line.match(/^(\S+)\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+?)(?:\s+\{[^}]*\}\s*)?$/);
                 
-                let parsedMessage = message.trim();
-                let jsonData = null;
-                let messageType = 'lifecycle';
+                if (match) {
+                    const [, timestamp, serverName, logLevel, message] = match;
+                    
+                    let parsedMessage = message.trim();
+                    let jsonData = null;
+                    let messageType = 'lifecycle';
 
-                if (message.includes('Message from client:') || message.includes('Message from server:')) {
-                    const direction = message.includes('Message from client:') ? 'client' : 'server';
-                    const jsonMatch = message.match(/Message from (?:client|server):\s*(\{.+)/);
-                    if (jsonMatch) {
-                        try {
-                            jsonData = JSON.parse(jsonMatch[1]);
-                            messageType = direction;
-                            parsedMessage = direction === 'client' ? 'Message from client' : 'Message from server';
-                        } catch (e) {
-                            console.log('Failed to parse JSON:', e.message);
+                    if (message.includes('Message from client:') || message.includes('Message from server:')) {
+                        const direction = message.includes('Message from client:') ? 'client' : 'server';
+                        const jsonMatch = message.match(/Message from (?:client|server):\s*(\{.+)/);
+                        if (jsonMatch) {
+                            try {
+                                jsonData = JSON.parse(jsonMatch[1]);
+                                messageType = direction;
+                                parsedMessage = direction === 'client' ? 'Message from client' : 'Message from server';
+                            } catch (e) {
+                                console.log('Failed to parse JSON:', e.message);
+                            }
                         }
                     }
-                }
 
-                return {
-                    timestamp,
-                    serverName,
-                    logLevel,
-                    message: parsedMessage,
-                    messageType,
-                    jsonData,
-                    raw: line
-                };
+                    return {
+                        timestamp,
+                        serverName,
+                        logLevel,
+                        message: parsedMessage,
+                        messageType,
+                        jsonData,
+                        raw: line
+                    };
+                }
+                
+                // Try mcp.log format: 2025-11-12T16:19:01.310Z [info] [server-name] Message
+                match = line.match(/^(\S+)\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+)$/);
+                
+                if (match) {
+                    const [, timestamp, logLevel, serverName, message] = match;
+                    
+                    let parsedMessage = message.trim();
+                    let jsonData = null;
+                    let messageType = 'lifecycle';
+
+                    if (message.includes('Message from client:') || message.includes('Message from server:')) {
+                        const direction = message.includes('Message from client:') ? 'client' : 'server';
+                        const jsonMatch = message.match(/Message from (?:client|server):\s*(\{.+)/);
+                        if (jsonMatch) {
+                            try {
+                                jsonData = JSON.parse(jsonMatch[1]);
+                                messageType = direction;
+                                parsedMessage = direction === 'client' ? 'Message from client' : 'Message from server';
+                            } catch (e) {
+                                console.log('Failed to parse JSON:', e.message);
+                            }
+                        }
+                    }
+
+                    return {
+                        timestamp,
+                        serverName,
+                        logLevel,
+                        message: parsedMessage,
+                        messageType,
+                        jsonData,
+                        raw: line
+                    };
+                }
+                
+                // Try main Claude log format: 2025-11-12 11:18:58 [info] Message
+                match = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+\[([^\]]+)\]\s+(.+)$/);
+                
+                if (match) {
+                    const [, timestamp, logLevel, message] = match;
+                    // Convert to ISO format for consistency
+                    const isoTimestamp = timestamp.replace(' ', 'T') + '.000Z';
+                    
+                    return {
+                        timestamp: isoTimestamp,
+                        serverName: 'claude-app',
+                        logLevel,
+                        message: message.trim(),
+                        messageType: 'lifecycle',
+                        jsonData: null,
+                        raw: line
+                    };
+                }
+                
+                console.log('Failed to parse line:', line.substring(0, 100));
+                return null;
             };
 
             const logEntries = useMemo(() => {
@@ -387,7 +443,7 @@
                     <div className="max-w-7xl mx-auto">
                         <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
                             <h1 className="text-3xl font-bold text-gray-800 mb-4">
-                                🔍 MCP Log Viewer
+                                📊 Universal Claude Log Viewer
                             </h1>
                             
                             <div className="mb-4">
@@ -411,7 +467,7 @@
                                     )}
                                 </div>
                                 <div className="text-xs text-gray-500 mt-1">
-                                    Default location: %APPDATA%\Claude\logs\mcp-server-ubuntu-shell-mcp.log
+                                    Default location: %APPDATA%\Claude\logs\<br/>Supports: MCP server logs, mcp.log, main.log, and web logs
                                 </div>
                                 {isLoading && (
                                     <div className="mt-2 text-sm text-blue-600">
@@ -708,7 +764,7 @@
                                 <div className="text-6xl mb-4">📄</div>
                                 <h2 className="text-2xl font-bold text-gray-800 mb-2">No Log File Loaded</h2>
                                 <p className="text-gray-600">Upload an MCP server log file to get started</p>
-                                <p className="text-sm text-gray-500 mt-2">Default location: %APPDATA%\Claude\logs\mcp-server-ubuntu-shell-mcp.log</p>
+                                <p className="text-sm text-gray-500 mt-2">Default location: %APPDATA%\Claude\logs\<br/>Supports: MCP server logs, mcp.log, main.log, and web logs</p>
                             </div>
                         )}
                     </div>

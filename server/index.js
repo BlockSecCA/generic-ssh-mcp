@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Ubuntu Shell MCP Server (SSH2 Persistent Connection Version)
+ * Generic SSH MCP Server (SSH2 Persistent Connection Version)
  * 
- * Executes bash commands on a remote Ubuntu server via SSH.
+ * Executes commands on a remote server via SSH with optional command wrapper.
  * Uses ssh2 library with persistent connection for improved performance.
+ * Supports configurable command wrappers (e.g., srt for sandboxing).
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -16,13 +17,14 @@ import {
 import { Client } from "ssh2";
 import { readFileSync } from "fs";
 
-console.error("[STARTUP] Ubuntu Shell MCP Server (SSH2) starting...");
+console.error("[STARTUP] Generic SSH MCP Server starting...");
 
 // SSH connection details from command line arguments
 let sshHost = null;
 let sshUser = null;
 let sshKeyPath = null;
 let commandTimeout = 15000; // Default 15 seconds
+let commandWrapper = ''; // Optional wrapper command
 
 // Interactive commands that should be rejected
 const INTERACTIVE_COMMANDS = [
@@ -49,6 +51,11 @@ for (let i = 0; i < args.length; i++) {
       commandTimeout = timeoutSeconds * 1000; // Convert to milliseconds
       console.error(`[CONFIG] Command timeout set to ${timeoutSeconds} seconds`);
     }
+  } else if (args[i] === '--wrapper' && i + 1 < args.length) {
+    commandWrapper = args[i + 1].trim();
+    if (commandWrapper) {
+      console.error(`[CONFIG] Command wrapper set to: ${commandWrapper}`);
+    }
   }
 }
 
@@ -60,11 +67,34 @@ if (!sshHost || !sshUser || !sshKeyPath) {
 console.error(`[STARTUP] SSH Target: ${sshUser}@${sshHost}`);
 console.error(`[STARTUP] SSH Key: ${sshKeyPath}`);
 console.error(`[STARTUP] Command Timeout: ${commandTimeout/1000} seconds`);
+console.error(`[STARTUP] Command Wrapper: ${commandWrapper || 'none (direct execution)'}`);
 
 // Persistent SSH connection
 let sshClient = null;
 let isConnecting = false;
 let connectionReady = false;
+
+/**
+ * Wrap a command with the configured wrapper (if any)
+ * @param {string} command - The original command
+ * @returns {string} - The wrapped command or original if no wrapper
+ */
+function wrapCommand(command) {
+  if (!commandWrapper) {
+    return command; // No wrapper, return as-is
+  }
+  
+  // Escape single quotes in the command for shell safety
+  const escaped = command.replace(/'/g, "'\\''");
+  
+  // Wrap with the configured wrapper
+  const wrapped = `${commandWrapper} '${escaped}'`;
+  
+  console.error(`[WRAPPER] Original: ${command}`);
+  console.error(`[WRAPPER] Wrapped:  ${wrapped}`);
+  
+  return wrapped;
+}
 
 /**
  * Check if a command is likely to be interactive
@@ -176,8 +206,9 @@ async function ensureConnection() {
 }
 
 /**
- * Execute a command on the remote Ubuntu server via persistent SSH connection
- * @param {string} command - The bash command to execute
+ * Execute a command on the remote server via persistent SSH connection
+ * Commands are automatically wrapped if a wrapper is configured
+ * @param {string} command - The command to execute
  * @returns {Promise<{stdout: string, stderr: string, exitCode: number}>}
  */
 async function executeRemoteCommand(command) {
@@ -188,6 +219,9 @@ async function executeRemoteCommand(command) {
     const firstWord = command.trim().split(/\s+/)[0];
     throw new Error(`Interactive command '${firstWord}' is not supported. Commands requiring user input cannot be executed. Try adding arguments or use non-interactive alternatives.`);
   }
+  
+  // Wrap command if wrapper is configured
+  const finalCommand = wrapCommand(command);
   
   // Ensure we have a connection
   const client = await ensureConnection();
@@ -211,7 +245,7 @@ async function executeRemoteCommand(command) {
       }
     }, commandTimeout);
     
-    client.exec(command, (err, stream) => {
+    client.exec(finalCommand, (err, stream) => {
       if (err) {
         clearTimeout(timeoutHandle);
         console.error(`[ERROR] Exec failed: ${err.message}`);
@@ -266,8 +300,8 @@ async function executeRemoteCommand(command) {
 console.error("[STARTUP] Creating MCP Server instance...");
 const server = new Server(
   {
-    name: "ubuntu-shell-ssh2-test",
-    version: "2.0.0-test",
+    name: "generic-ssh",
+    version: "3.0.0",
   },
   {
     capabilities: {
@@ -281,13 +315,27 @@ console.error("[STARTUP] Server instance created successfully");
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   console.error("[HANDLER] ListTools called");
   
+  const wrapperDescription = commandWrapper 
+    ? `Commands are wrapped with: ${commandWrapper}
+
+This provides additional control or security depending on the wrapper:
+- 'srt': Sandboxed execution with filesystem/network restrictions
+- 'timeout N': Time-limited execution (N seconds)
+- 'nice -n N': Lower priority execution
+- Custom wrappers: Any command that accepts a command string`
+    : `Commands execute directly via bash with no wrapper.`;
+  
   return {
     tools: [
       {
-        name: "bash",
-        description: `Execute a bash command on the Ubuntu server (${sshUser}@${sshHost}).
+        name: "command",
+        description: `Execute a command on the remote server (${sshUser}@${sshHost}).
 
 This version uses a persistent SSH2 connection for improved performance.
+
+Execution mode: ${commandWrapper || 'direct (no wrapper)'}
+
+${wrapperDescription}
 
 Commands are executed via SSH and run with the privileges of the SSH user.
 
@@ -298,7 +346,7 @@ Examples:
 - "docker ps"
 
 Limitations:
-- Interactive commands (sudo, vim, top, etc.) are not supported
+- Interactive commands (sudo without args, vim, top, etc.) are not supported
 - Commands timeout after ${commandTimeout/1000} seconds
 - Commands run in a non-interactive shell
 
@@ -308,7 +356,7 @@ For sudo commands, use non-interactive alternatives or configure passwordless su
           properties: {
             command: {
               type: "string",
-              description: "The bash command to execute on the Ubuntu server",
+              description: "The command to execute on the remote server" + (commandWrapper ? ` (will be automatically wrapped with '${commandWrapper}')` : ""),
             },
           },
           required: ["command"],
@@ -325,7 +373,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   console.error(`[HANDLER] CallTool called with tool: ${name}`);
   
   try {
-    if (name === "bash") {
+    if (name === "command") {
       const command = args?.command;
       
       if (!command || typeof command !== 'string') {
@@ -336,7 +384,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error("command cannot be empty");
       }
       
-      // Execute the command using persistent connection
+      // Execute the command using persistent connection with optional wrapper
       const result = await executeRemoteCommand(command);
       
       // Build response text
@@ -407,6 +455,11 @@ async function main() {
     console.error("[STARTUP] ✓ Server connected and ready");
     console.error(`[STARTUP] ✓ Target: ${sshUser}@${sshHost}`);
     console.error("[STARTUP] ✓ SSH connection will be established on first command");
+    if (commandWrapper) {
+      console.error(`[STARTUP] ✓ All commands will be wrapped with: ${commandWrapper}`);
+    } else {
+      console.error("[STARTUP] ✓ Commands will execute directly (no wrapper)");
+    }
     console.error("[STARTUP] ✓ Waiting for client requests...");
   } catch (error) {
     console.error("[FATAL] Server initialization failed:", error.message);

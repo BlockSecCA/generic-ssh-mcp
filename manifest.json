@@ -1,8 +1,8 @@
 {
   "manifest_version": "0.2",
-  "name": "ubuntu-shell-mcp",
-  "version": "2.0.0",
-  "description": "Execute bash commands on a remote Ubuntu server via SSH with persistent connection",
+  "name": "ssh-pihole",
+  "version": "3.0.0",
+  "description": "Execute commands on a remote server via SSH with optional command wrapper (e.g., srt for sandboxing)",
   "author": {
     "name": "Carlos"
   },
@@ -20,14 +20,16 @@
         "--key",
         "${user_config.ssh_key}",
         "--timeout",
-        "${user_config.command_timeout}"
+        "${user_config.command_timeout}",
+        "--wrapper",
+        "${user_config.command_wrapper}"
       ]
     }
   },
   "user_config": {
     "ssh_host": {
       "title": "SSH Host",
-      "description": "Hostname or IP address of the Ubuntu server",
+      "description": "Hostname or IP address of the remote server",
       "type": "string",
       "required": true
     },
@@ -39,7 +41,7 @@
     },
     "ssh_key": {
       "title": "SSH Private Key Path",
-      "description": "Full path to SSH private key (e.g., C:\\Users\\Carlos\\.ssh\\id_ed25519)",
+      "description": "Full path to SSH private key (e.g., C:\\\\Users\\\\YourUsername\\\\.ssh\\\\id_ed25519)",
       "type": "string",
       "required": true
     },
@@ -49,12 +51,19 @@
       "type": "string",
       "required": false,
       "default": "15"
+    },
+    "command_wrapper": {
+      "title": "Command Wrapper",
+      "description": "Optional wrapper command (e.g., 'srt' for sandboxing, 'timeout 30' for time limits, or leave empty for direct execution)",
+      "type": "string",
+      "required": false,
+      "default": ""
     }
   },
   "tools": [
     {
-      "name": "bash",
-      "description": "Execute a bash command on the Ubuntu server"
+      "name": "command",
+      "description": "Execute a command on the remote server"
     }
   ],
   "license": "MIT"
