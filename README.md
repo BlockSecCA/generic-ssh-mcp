@@ -64,7 +64,8 @@ The wrapper field allows you to control how commands execute:
 - Any command that accepts a command string
 - Example: `strace -e trace=file` for debugging
 
->[!WARNING] Dont leave the wrapper empty. For bash just put a blank space. Also dont put bash as it will result on a double bash call by sshd in the target system
+> [!WARNING]
+> **Command Wrapper Configuration**: Do not leave the wrapper empty. For direct bash execution, use a single space `" "`. Never use `"bash"` as the wrapper - this creates a double bash invocation (wrapper bash + SSH daemon bash) causing command failures.
 
 ## Multiple Systems
 
