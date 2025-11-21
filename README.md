@@ -6,8 +6,9 @@ A flexible MCP server for executing commands on remote servers via SSH with opti
 
 - **Persistent SSH Connection**: Fast command execution using ssh2 library
 - **Configurable Wrapper**: Optional command wrapper for sandboxing, timeouts, or other control
+- **Configurable Tool Name**: Custom tool name per instance for easy identification in Claude UI
 - **Multiple Systems**: Build separate packages for different target systems
-- **Simple Tool Interface**: Single `command` tool with string parameter
+- **Simple Tool Interface**: Single tool with string parameter
 
 ## Quick Start
 
@@ -17,24 +18,38 @@ A flexible MCP server for executing commands on remote servers via SSH with opti
 ./build.sh ssh-ubuntupc
 ```
 
-This creates `ssh-ubuntupc.mcpb` which you can install in Claude Desktop.
+This creates `ssh-ubuntupc.mcpb` which you can install in Claude Desktop. The tool will appear as "ssh-ubuntupc" in the Claude UI.
 
 ### 2. Install in Claude Desktop
 
 1. Transfer the `.mcpb` file to Windows
 2. Double-click to install
 3. Configure:
-   - **SSH Host**: `ubuntupc` (or IP address)
+   - **SSH Host**: `192.168.1.70` (use IP address, not hostname)
    - **SSH Username**: `YourUsername`
    - **SSH Private Key Path**: `C:\Users\YourUsername\.ssh\id_ed25519`
    - **Command Timeout**: `30` (seconds)
-   - **Command Wrapper**: `srt` (or leave empty for direct execution)
+   - **Command Wrapper**: leave empty for direct execution, or `srt` for sandboxing
+   - **Tool Name**: `ssh-ubuntupc` (auto-populated, helps distinguish multiple SSH servers)
 
 ### 3. Use in Claude
 
 ```
 Using ssh-ubuntupc, run: ls -la /home/YourUsername
 ```
+
+## Tool Name Configuration
+
+When running multiple SSH MCP servers (e.g., one for each remote system), the tool name helps distinguish them in the Claude UI.
+
+The build script automatically sets the tool name to match the package name:
+
+```bash
+./build.sh ssh-kali      # Tool appears as "ssh-kali" in Claude UI
+./build.sh ssh-ubuntupc  # Tool appears as "ssh-ubuntupc" in Claude UI
+```
+
+Without this, all instances would show as "command" making them indistinguishable.
 
 ## Command Wrapper
 
@@ -65,7 +80,7 @@ The wrapper field allows you to control how commands execute:
 - Example: `strace -e trace=file` for debugging
 
 > [!WARNING]
-> **Command Wrapper Configuration**: Do not leave the wrapper empty. For direct bash execution, use a single space `" "`. Never use `"bash"` as the wrapper - this creates a double bash invocation (wrapper bash + SSH daemon bash) causing command failures.
+> **Command Wrapper Configuration**: For direct bash execution, leave the wrapper field empty or use a single space `" "`. Never use `"bash"` as the wrapper - this creates a double bash invocation (wrapper bash + SSH daemon bash) causing command failures.
 
 ## Multiple Systems
 
@@ -73,11 +88,12 @@ Build a package for each system you want to connect to:
 
 ```bash
 ./build.sh ssh-ubuntupc    # Creates ssh-ubuntupc.mcpb
+./build.sh ssh-kali        # Creates ssh-kali.mcpb
 ./build.sh ssh-pihole      # Creates ssh-pihole.mcpb  
 ./build.sh ssh-prodserver  # Creates ssh-prodserver.mcpb
 ```
 
-Each package is independent with its own configuration in Claude Desktop.
+Each package is independent with its own configuration in Claude Desktop. Each will display with its own name in the Claude UI for easy identification.
 
 ## Architecture
 
@@ -115,8 +131,6 @@ graph TD
     style Shell fill:#f0f0f0
 ```
 
-
-
 ```
 Claude Desktop (Windows)
   → MCP Server (Node.js on Windows)
@@ -139,7 +153,7 @@ User asks: "list files"
 
 ## Tool Definition
 
-**Name:** `command`
+**Name:** Configurable via `tool_name` parameter (defaults to package name)
 
 **Parameters:**
 - `command` (string, required): The command to execute
@@ -221,6 +235,11 @@ See INSTALLATION.md for complete setup instructions.
 
 ## Version History
 
+- **3.1.0** - Configurable tool name
+  - Added `--tool-name` parameter for custom tool names in Claude UI
+  - Build script auto-sets tool name to match package name
+  - Helps distinguish multiple SSH server instances
+  
 - **3.0.0** - Generic SSH with configurable wrapper
   - Tool renamed from `bash` to `command`
   - Added configurable wrapper field

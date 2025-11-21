@@ -20,8 +20,8 @@ PACKAGE_NAME="$1"
 
 echo "Building MCP package: ${PACKAGE_NAME}"
 
-# Update manifest.json with the new name
-jq ".name = \"${PACKAGE_NAME}\"" manifest.json > manifest.json.tmp
+# Update manifest.json with the new name, tool name, and default tool_name config
+jq ".name = \"${PACKAGE_NAME}\" | .tools[0].name = \"${PACKAGE_NAME}\" | .user_config.tool_name.default = \"${PACKAGE_NAME}\"" manifest.json > manifest.json.tmp
 mv manifest.json.tmp manifest.json
 
 echo "Updated manifest.json with name: ${PACKAGE_NAME}"

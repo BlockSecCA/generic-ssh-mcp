@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.2",
-  "name": "ssh-pihole",
-  "version": "3.0.0",
+  "name": "ssh-ubuntupc",
+  "version": "3.1.0",
   "description": "Execute commands on a remote server via SSH with optional command wrapper (e.g., srt for sandboxing)",
   "author": {
     "name": "Carlos"
@@ -22,7 +22,9 @@
         "--timeout",
         "${user_config.command_timeout}",
         "--wrapper",
-        "${user_config.command_wrapper}"
+        "${user_config.command_wrapper}",
+        "--tool-name",
+        "${user_config.tool_name}"
       ]
     }
   },
@@ -58,11 +60,18 @@
       "type": "string",
       "required": false,
       "default": ""
+    },
+    "tool_name": {
+      "title": "Tool Name",
+      "description": "Name displayed in Claude UI for this tool (e.g., 'ssh-kali', 'ssh-ubuntupc'). Helps distinguish between multiple SSH servers.",
+      "type": "string",
+      "required": false,
+      "default": "ssh-ubuntupc"
     }
   },
   "tools": [
     {
-      "name": "command",
+      "name": "ssh-ubuntupc",
       "description": "Execute a command on the remote server"
     }
   ],

@@ -25,6 +25,7 @@ let sshUser = null;
 let sshKeyPath = null;
 let commandTimeout = 15000; // Default 15 seconds
 let commandWrapper = ''; // Optional wrapper command
+let toolName = 'command'; // Default tool name, can be overridden
 
 // Interactive commands that should be rejected
 const INTERACTIVE_COMMANDS = [
@@ -56,6 +57,11 @@ for (let i = 0; i < args.length; i++) {
     if (commandWrapper) {
       console.error(`[CONFIG] Command wrapper set to: ${commandWrapper}`);
     }
+  } else if (args[i] === '--tool-name' && i + 1 < args.length) {
+    toolName = args[i + 1].trim();
+    if (toolName) {
+      console.error(`[CONFIG] Tool name set to: ${toolName}`);
+    }
   }
 }
 
@@ -68,6 +74,7 @@ console.error(`[STARTUP] SSH Target: ${sshUser}@${sshHost}`);
 console.error(`[STARTUP] SSH Key: ${sshKeyPath}`);
 console.error(`[STARTUP] Command Timeout: ${commandTimeout/1000} seconds`);
 console.error(`[STARTUP] Command Wrapper: ${commandWrapper || 'none (direct execution)'}`);
+console.error(`[STARTUP] Tool Name: ${toolName}`);
 
 // Persistent SSH connection
 let sshClient = null;
@@ -328,7 +335,7 @@ This provides additional control or security depending on the wrapper:
   return {
     tools: [
       {
-        name: "command",
+        name: toolName,
         description: `Execute a command on the remote server (${sshUser}@${sshHost}).
 
 This version uses a persistent SSH2 connection for improved performance.
@@ -373,7 +380,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   console.error(`[HANDLER] CallTool called with tool: ${name}`);
   
   try {
-    if (name === "command") {
+    if (name === toolName) {
       const command = args?.command;
       
       if (!command || typeof command !== 'string') {
@@ -454,6 +461,7 @@ async function main() {
     
     console.error("[STARTUP] ✓ Server connected and ready");
     console.error(`[STARTUP] ✓ Target: ${sshUser}@${sshHost}`);
+    console.error(`[STARTUP] ✓ Tool name: ${toolName}`);
     console.error("[STARTUP] ✓ SSH connection will be established on first command");
     if (commandWrapper) {
       console.error(`[STARTUP] ✓ All commands will be wrapped with: ${commandWrapper}`);
