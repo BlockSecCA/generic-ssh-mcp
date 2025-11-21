@@ -191,6 +191,31 @@ srt 'ls -la'                    # Should work
 srt 'cat ~/.ssh/id_ed25519'     # Should be blocked
 ```
 
+### ⚠️ Critical SRT Security Warning
+
+**Default SRT configuration has a security vulnerability**: SRT does not block access to its own config file by default. Without proper configuration, Claude can modify `~/.srt-settings.json` to escape the sandbox.
+
+**Required protection**:
+```json
+{
+  "filesystem": {
+    "denyRead": ["~/.srt-settings.json"],
+    "denyWrite": ["~/.srt-settings.json"]
+  }
+}
+```
+
+**Verification test**:
+```bash
+# This should be BLOCKED
+srt 'cat ~/.srt-settings.json'
+srt 'echo "malicious" >> ~/.srt-settings.json'
+```
+
+If these commands succeed, your sandbox is compromised. SRT must deny both read and write access to its own configuration file to prevent escape.
+
+**Reference**: See [Anthropic Sandbox Runtime](https://github.com/anthropic-experimental/sandbox-runtime) for more details on SRT configuration and security considerations.
+
 See INSTALLATION.md for complete setup instructions.
 
 ## Version History
